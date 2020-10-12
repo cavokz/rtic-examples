@@ -5,9 +5,6 @@
 
 extern crate panic_semihosting;
 
-use heapless::Vec;
-use heapless::consts::*;
-
 use rtic::app;
 use rtic::cyccnt::U32Ext;
 
@@ -20,6 +17,16 @@ const CLK_SPEED_MHZ: u32 = 72;
 // Cycles per thousandth of beat
 const MILLI_BEAT: u32 = CLK_SPEED_MHZ * 60_000 / BEATS_PER_MIN;
 
+// Simple heart beat LED on/off sequence
+const INTERVALS: [u32; 6] = [
+    30,  // P Wave
+    40,  // PR Segment
+    120, // QRS Complex
+    30,  // ST Segment
+    60,  // T Wave
+    720, // Rest
+];
+
 // We need to pass monotonic = rtic::cyccnt::CYCCNT to use schedule feature fo RTIC
 #[app(device = stm32l4xx_hal::pac, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -27,7 +34,6 @@ const APP: () = {
     // `LateResources` struct in init
     struct Resources {
         led: PB3<Output<PushPull>>,
-        intervals: Vec<u32, U6>,
     }
 
     #[init(schedule = [blinker])]
@@ -50,19 +56,10 @@ const APP: () = {
             .pb3
             .into_push_pull_output_with_state(&mut gpiob.moder, &mut gpiob.otyper, State::Low);
 
-        // Simple heart beat LED on/off sequence
-        let mut intervals: Vec<u32, U6> = Vec::new();
-        intervals.push(MILLI_BEAT * 30).unwrap();  // P Wave
-        intervals.push(MILLI_BEAT * 40).unwrap();  // PR Segment
-        intervals.push(MILLI_BEAT * 120).unwrap(); // QRS Complex
-        intervals.push(MILLI_BEAT * 30).unwrap();  // ST Segment
-        intervals.push(MILLI_BEAT * 60).unwrap();  // T Wave
-        intervals.push(MILLI_BEAT * 720).unwrap(); // Rest
-
         // Schedule the blinking task
         cx.schedule.blinker(cx.start, 0).unwrap();
 
-        init::LateResources { led, intervals }
+        init::LateResources { led }
     }
 
     #[idle]
@@ -72,12 +69,11 @@ const APP: () = {
         }
     }
 
-    #[task(schedule = [blinker], resources = [led, &intervals])]
+    #[task(schedule = [blinker], resources = [led])]
     fn blinker(cx: blinker::Context, state: usize) {
         let led = cx.resources.led;
-        let intervals = cx.resources.intervals;
-        let duration = intervals[state].cycles();
-        let next_state = (state + 1) % intervals.len();
+        let duration = MILLI_BEAT * INTERVALS[state];
+        let next_state = (state + 1) % INTERVALS.len();
 
         if state % 2 == 0 {
             led.set_high().unwrap();
@@ -85,7 +81,7 @@ const APP: () = {
             led.set_low().unwrap();
         }
 
-        cx.schedule.blinker(cx.scheduled + duration, next_state).unwrap();
+        cx.schedule.blinker(cx.scheduled + duration.cycles(), next_state).unwrap();
     }
 
     extern "C" {
