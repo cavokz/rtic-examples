@@ -30,6 +30,21 @@ const INTERVALS: [u32; 6] = [
     720, // Rest
 ];
 
+fn init_profile(device: &pac::Peripherals) {
+    // By default, power down the DBG module during wfi()
+    device.DBGMCU.cr.modify(|_, w| w.dbg_standby().clear_bit());
+    device.DBGMCU.cr.modify(|_, w| w.dbg_sleep().clear_bit());
+    device.DBGMCU.cr.modify(|_, w| w.dbg_stop().clear_bit());
+
+    #[cfg(debug_assertions)]
+    {
+        // On development, keep the DBG module powered on during wfi()
+        device.DBGMCU.cr.modify(|_, w| w.dbg_standby().set_bit());
+        device.DBGMCU.cr.modify(|_, w| w.dbg_sleep().set_bit());
+        device.DBGMCU.cr.modify(|_, w| w.dbg_stop().set_bit());
+    }
+}
+
 // We need to pass monotonic = rtic::cyccnt::CYCCNT to use schedule feature fo RTIC
 #[app(device = crate::pac, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -44,6 +59,9 @@ const APP: () = {
         // Enable cycle counter
         let mut core = cx.core;
         core.DWT.enable_cycle_counter();
+
+        // Build profile initialization
+        init_profile(&cx.device);
 
         // Setup clocks
         let mut flash = cx.device.FLASH.constrain();
@@ -63,13 +81,6 @@ const APP: () = {
         cx.schedule.blinker(cx.start, 0).unwrap();
 
         init::LateResources { led }
-    }
-
-    #[idle]
-    fn idle(_: idle::Context) -> ! {
-        loop {
-            core::sync::atomic::spin_loop_hint();
-        }
     }
 
     #[task(schedule = [blinker], resources = [led])]
