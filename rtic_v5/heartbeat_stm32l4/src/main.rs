@@ -8,8 +8,11 @@ extern crate panic_semihosting;
 use rtic::app;
 use rtic::cyccnt::U32Ext;
 
-use stm32l4xx_hal::gpio::{gpiob::PB3, Output, PushPull, State};
-use stm32l4xx_hal::prelude::*;
+use stm32l4xx_hal::{
+    gpio::{gpiob::PB3, Output, PushPull, State},
+    pac,
+    prelude::*,
+};
 
 const BEATS_PER_MIN: u32 = 60;
 const CLK_SPEED_MHZ: u32 = 72;
@@ -28,7 +31,7 @@ const INTERVALS: [u32; 6] = [
 ];
 
 // We need to pass monotonic = rtic::cyccnt::CYCCNT to use schedule feature fo RTIC
-#[app(device = stm32l4xx_hal::pac, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+#[app(device = crate::pac, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     // Global resources (global variables) are defined here and initialized with the 
     // `LateResources` struct in init
